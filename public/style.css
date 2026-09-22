@@ -1,0 +1,145 @@
+:root {
+  --field: #0E141A;
+  --surface: #131D27;
+  --hair: #24323F;
+  --fog: #7E8C99;
+  --paper: #E6EDF2;
+  --sodium: #FFC46B;
+  --teal: #46C4C0;
+  --rose: #E8637F;
+  --rail: 332px;
+  /* Condensed grotesques: the cartographic tradition, and they fit a narrow rail. */
+  --sans: 'Liberation Sans Narrow', 'DejaVu Sans Condensed', 'Roboto Condensed',
+          'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%;
+  background: var(--field);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#map { position: fixed; inset: 0 0 0 var(--rail); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* A flush full-height chassis, not a floating card. */
+.readout {
+  position: fixed; inset: 0 auto 0 0; width: var(--rail);
+  display: flex; flex-direction: column; gap: 22px;
+  padding: 26px 24px 18px;
+  background: var(--surface);
+  border-right: 1px solid var(--hair);
+  overflow-y: auto;
+  z-index: 2;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 40px; font-weight: 700;
+  letter-spacing: -0.022em; line-height: 0.95;
+}
+.standfirst {
+  margin: 8px 0 0; max-width: 30ch;
+  font-size: 14px; line-height: 1.45; color: var(--fog);
+}
+
+.views {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  margin: 0; padding: 0; border: 1px solid var(--hair);
+}
+.views legend { padding: 0; }
+.views label { position: relative; display: block; }
+.views input {
+  position: absolute; opacity: 0; width: 100%; height: 100%;
+  margin: 0; cursor: pointer;
+}
+.views span {
+  display: block; padding: 9px 4px; text-align: center;
+  font-size: 13.5px; color: var(--fog);
+  border-left: 1px solid var(--hair);
+  transition: color .12s, background-color .12s;
+}
+.views label:first-child span { border-left: 0; }
+.views input:checked + span { color: var(--field); background: var(--paper); font-weight: 700; }
+.views input:focus-visible + span { outline: 2px solid var(--sodium); outline-offset: -2px; }
+.views label:hover input:not(:checked) + span { color: var(--paper); }
+
+.explainer {
+  margin: -12px 0 0; max-width: 34ch;
+  font-size: 13px; line-height: 1.5; color: var(--fog);
+}
+
+.ramp { height: 9px; }
+.ramp-ends {
+  display: flex; justify-content: space-between;
+  margin-top: 6px; font-size: 12px; color: var(--fog);
+}
+.unknown-key {
+  display: flex; align-items: center; gap: 8px;
+  margin: 12px 0 0; font-size: 12px; color: var(--fog);
+}
+.swatch-unknown {
+  width: 15px; height: 13px; flex: none;
+  border: 1px dashed #47586A;
+  background: rgba(126,140,153,.07);
+}
+
+.cell { flex: 1; min-height: 0; border-top: 1px solid var(--hair); padding-top: 18px; }
+.cell h2 {
+  margin: 0 0 2px; font-size: 20px; font-weight: 700; letter-spacing: -0.012em;
+}
+.cell .sub { margin: 0 0 16px; font-size: 12.5px; color: var(--fog); }
+
+.rows { display: grid; gap: 9px; }
+.row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 10px; }
+.row dt { font-size: 13.5px; color: var(--fog); }
+.row dd {
+  margin: 0; font-size: 15px; font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.row dd em { font-style: normal; color: var(--fog); font-size: 12.5px; }
+
+.meter { height: 3px; background: var(--hair); grid-column: 1 / -1; }
+.meter i { display: block; height: 100%; }
+
+.types { margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--hair); }
+.types .row dd { font-size: 13.5px; }
+
+.hint { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--fog); max-width: 34ch; }
+
+.colophon { margin-top: auto; font-size: 11.5px; line-height: 1.5; color: #5D6B78; }
+.colophon p { margin: 0; }
+.colophon a { color: #7E8C99; }
+
+.maplibregl-ctrl-attrib { display: none; }
+.maplibregl-canvas:focus-visible { outline: 2px solid var(--sodium); outline-offset: -2px; }
+
+@media (max-width: 760px) {
+  :root { --rail: 100%; }
+  #map { inset: 0 0 46% 0; }
+  .readout {
+    inset: 54% 0 0 0; width: 100%;
+    border-right: 0; border-top: 1px solid var(--hair);
+    padding: 18px 18px 14px; gap: 16px;
+  }
+  .masthead h1 { font-size: 28px; }
+  .standfirst { display: none; }
+  /* The rail scrolls on a phone, so the readout must take its natural height;
+     flex: 1 lets its content overflow and collide with the colophon. */
+  .cell { flex: none; }
+  .colophon { margin-top: 18px; padding-bottom: 6px; }
+  .explainer { margin-top: -6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

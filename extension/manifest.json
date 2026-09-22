@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Sidewalk for Zillow",
+  "version": "0.1.0",
+  "description": "Draws Seattle's own street-condition reports over Zillow's map, corrected for how readily each neighbourhood reports anything.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.zillow.com/*"],
+      "js": ["shared.js", "overlay.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["data/cells.geojson"], "matches": ["https://www.zillow.com/*"] }
+  ]
+}

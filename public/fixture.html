@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sidewalk overlay alignment fixture</title>
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<link rel="stylesheet" href="../extension/overlay.css">
+<style>
+  html,body{margin:0;height:100%;background:#0E141A;font-family:'Liberation Sans Narrow','DejaVu Sans Condensed','Arial Narrow',sans-serif}
+  #map{position:fixed;inset:0}
+  #verdict{position:fixed;top:12px;left:12px;z-index:500;background:#131D27;color:#E6EDF2;
+    border:1px solid #2B3A48;padding:10px 12px;font-size:13px;line-height:1.5;max-width:360px}
+  #verdict b{font-size:15px}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="verdict">Measuring…</div>
+
+<script>globalThis.SIDEWALK_CONTAINER = '#map';</script>
+<script src="lib/maplibre-gl.js"></script>
+<script src="shared.js"></script>
+<script>
+// The overlay reads Zillow's map rectangle out of the URL. This fixture makes
+// MapLibre play the part of Zillow: it writes its own bounds into an identical
+// searchQueryState param, so the overlay's projection can be checked against
+// MapLibre's, which is the reference implementation.
+const map = new maplibregl.Map({
+  container: 'map',
+  center: [-122.3321, 47.6162], zoom: 12,
+  attributionControl: false,
+  style: { version: 8, sources: { base: {
+    type: 'raster', tileSize: 256, maxzoom: 16,
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
+  } }, layers: [{ id: 'base', type: 'raster', source: 'base',
+    paint: { 'raster-opacity': 1, 'raster-brightness-max': 0.34 } }] },
+});
+
+function publishBounds() {
+  const b = map.getBounds();
+  const state = {
+    pagination: {},
+    mapBounds: { west: b.getWest(), east: b.getEast(), south: b.getSouth(), north: b.getNorth() },
+    mapZoom: Math.round(map.getZoom()),
+  };
+  const url = new URL(location.href);
+  url.searchParams.set('searchQueryState', JSON.stringify(state));
+  history.replaceState(null, '', url);
+  return state.mapBounds;
+}
+
+// Numeric check: project the same points with MapLibre and with the overlay's
+// own maths. Eyeballing hexes cannot catch a one-pixel systematic drift.
+function measure(bounds) {
+  const rect = document.getElementById('map').getBoundingClientRect();
+  const project = globalThis.Sidewalk.projector(bounds, rect.width, rect.height);
+  const samples = [];
+  for (let i = 0; i <= 4; i++) {
+    for (let j = 0; j <= 4; j++) {
+      samples.push([
+        bounds.west + (bounds.east - bounds.west) * (i / 4),
+        bounds.south + (bounds.north - bounds.south) * (j / 4),
+      ]);
+    }
+  }
+  let worst = 0;
+  for (const [lng, lat] of samples) {
+    const ref = map.project([lng, lat]);
+    const [x, y] = project(lng, lat);
+    worst = Math.max(worst, Math.hypot(ref.x - x, ref.y - y));
+  }
+  return { worst, n: samples.length, rect };
+}
+
+map.on('load', () => {
+  fetch('data/cells.geojson').then((r) => r.json()).then((gj) => {
+    map.addSource('cells', { type: 'geojson', data: gj });
+    // Outlines only. The overlay canvas draws the fills; if the projection is
+    // right the fills sit exactly inside these rings.
+    map.addLayer({ id: 'ref', type: 'line', source: 'cells',
+      paint: { 'line-color': '#FFFFFF', 'line-width': 1, 'line-opacity': 0.85 } });
+    report();
+  });
+});
+
+function report() {
+  const bounds = publishBounds();
+  if (globalThis.SidewalkOverlay) globalThis.SidewalkOverlay.draw();
+  const { worst, n, rect } = measure(bounds);
+  document.getElementById('verdict').innerHTML =
+    `<b>${worst < 0.5 ? 'Aligned' : 'MISALIGNED'}</b><br>` +
+    `worst error ${worst.toFixed(3)} px across ${n} points<br>` +
+    `viewport ${Math.round(rect.width)}×${Math.round(rect.height)} · zoom ${map.getZoom().toFixed(2)}`;
+  globalThis.__align = { worst, zoom: map.getZoom() };
+}
+map.on('moveend', report);
+</script>
+<script src="../extension/overlay.js"></script>
+</body>
+</html>

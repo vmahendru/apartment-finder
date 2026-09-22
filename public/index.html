@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sidewalk — what Seattle reports about its own streets</title>
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M8 1l6 3.5v7L8 15l-6-3.5v-7z%22 fill=%22%23FFC46B%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map" role="application" aria-label="Map of reported street conditions in Seattle"></div>
+
+<section class="readout" aria-live="polite">
+  <header class="masthead">
+    <h1>Sidewalk</h1>
+    <p class="standfirst">What Seattle reports about its own streets.</p>
+  </header>
+
+  <fieldset class="views">
+    <legend class="sr-only">Choose what the map shows</legend>
+    <label><input type="radio" name="view" value="reported" checked><span>Reported</span></label>
+    <label><input type="radio" name="view" value="adjusted"><span>Adjusted</span></label>
+    <label><input type="radio" name="view" value="gap"><span>Disagreement</span></label>
+  </fieldset>
+  <p class="explainer" id="explainer"></p>
+
+  <div class="scale">
+    <div class="ramp" id="ramp"></div>
+    <div class="ramp-ends"><span id="ramp-lo"></span><span id="ramp-hi"></span></div>
+    <p class="unknown-key"><span class="swatch-unknown" aria-hidden="true"></span>Outlined only: too few reports to judge</p>
+  </div>
+
+  <div class="cell" id="cell"></div>
+
+  <footer class="colophon">
+    <p id="asof"></p>
+    <p>Seattle Open Data · basemap <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></p>
+  </footer>
+</section>
+
+<script src="lib/maplibre-gl.js"></script>
+<script src="shared.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
