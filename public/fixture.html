@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="lib/maplibre-gl.css">
 <link rel="stylesheet" href="../extension/overlay.css">
 <style>
-  html,body{margin:0;height:100%;background:#0E141A;font-family:'Liberation Sans Narrow','DejaVu Sans Condensed','Arial Narrow',sans-serif}
+  html,body{margin:0;height:100%;background:#F2F2F2;font-family:'Liberation Sans Narrow','DejaVu Sans Condensed','Arial Narrow',sans-serif}
   #map{position:fixed;inset:0}
   #verdict{position:fixed;top:12px;left:12px;z-index:500;background:#131D27;color:#E6EDF2;
     border:1px solid #2B3A48;padding:10px 12px;font-size:13px;line-height:1.5;max-width:360px}
@@ -31,9 +31,9 @@ const map = new maplibregl.Map({
   attributionControl: false,
   style: { version: 8, sources: { base: {
     type: 'raster', tileSize: 256, maxzoom: 16,
-    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
+    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
   } }, layers: [{ id: 'base', type: 'raster', source: 'base',
-    paint: { 'raster-opacity': 1, 'raster-brightness-max': 0.34 } }] },
+    paint: { "raster-opacity": 1 } }] },
 });
 
 function publishBounds() {
@@ -78,7 +78,7 @@ map.on('load', () => {
     // Outlines only. The overlay canvas draws the fills; if the projection is
     // right the fills sit exactly inside these rings.
     map.addLayer({ id: 'ref', type: 'line', source: 'cells',
-      paint: { 'line-color': '#FFFFFF', 'line-width': 1, 'line-opacity': 0.85 } });
+      paint: { 'line-color': '#111111', 'line-width': 1, 'line-opacity': 0.5 } });
     report();
   });
 });

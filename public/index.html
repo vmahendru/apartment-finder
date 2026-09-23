@@ -14,20 +14,28 @@
 <section class="readout" aria-live="polite">
   <header class="masthead">
     <h1>Sidewalk</h1>
-    <p class="standfirst">What Seattle reports about its own streets.</p>
+    <p class="standfirst">Where Seattle is lively, and where it stays calm for it.</p>
   </header>
 
   <fieldset class="views">
     <legend class="sr-only">Choose what the map shows</legend>
-    <label><input type="radio" name="view" value="reported" checked><span>Reported</span></label>
+    <label class="wide"><input type="radio" name="view" value="sweet" checked><span>Lively &amp; calm</span></label>
+    <label class="wide"><input type="radio" name="view" value="walkable"><span>Walkable</span></label>
+    <label><input type="radio" name="view" value="reported"><span>Reported</span></label>
     <label><input type="radio" name="view" value="adjusted"><span>Adjusted</span></label>
     <label><input type="radio" name="view" value="gap"><span>Disagreement</span></label>
   </fieldset>
   <p class="explainer" id="explainer"></p>
 
   <div class="scale">
-    <div class="ramp" id="ramp"></div>
-    <div class="ramp-ends"><span id="ramp-lo"></span><span id="ramp-hi"></span></div>
+    <div id="ramp-key">
+      <div class="ramp" id="ramp"></div>
+      <div class="ramp-ends"><span id="ramp-lo"></span><span id="ramp-hi"></span></div>
+    </div>
+    <div id="biv-key" hidden>
+      <div class="biv-grid" id="biv-grid"></div>
+      <p class="biv-axes"><span>more to walk to &rarr;</span><span>&uarr; calmer for it</span></p>
+    </div>
     <p class="unknown-key"><span class="swatch-unknown" aria-hidden="true"></span>Outlined only: too few reports to judge</p>
   </div>
 

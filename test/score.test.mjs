@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   hasToken, encampmentSeverity, recencyWeight, shrunkShare,
-  compositionRatio, percentileRanks, confidence, SEVERITY_FLOOR,
+  compositionRatio, percentileRanks, confidence, SEVERITY_FLOOR, residualByBand,
 } from '../src/score.mjs';
 
 const close = (a, b, eps = 1e-9) =>
@@ -98,4 +98,29 @@ test('confidence degrades with thin evidence', () => {
   assert.equal(confidence(30), 'high');
   assert.equal(confidence(8), 'medium');
   assert.equal(confidence(0), 'low');
+});
+
+test('residualByBand strips a monotone relationship out', () => {
+  // Two bands: {10,20} median 15, {30,40} median 35.
+  assert.deepEqual(residualByBand([1, 2, 3, 4], [10, 20, 30, 40], 2), [-5, 5, -5, 5]);
+});
+
+test('residualByBand finds the cell that is calm for its band', () => {
+  // Four lively cells; the third is much quieter than its peers.
+  const amenity = [10, 20, 90, 91, 92, 93];
+  const grime = [5, 6, 80, 82, 20, 84];
+  const r = residualByBand(amenity, grime, 2);
+  const quietest = r.indexOf(Math.min(...r));
+  assert.equal(quietest, 4, 'the cell with grime 20 among lively peers should stand out');
+  assert.ok(r[4] < -50, `expected a large negative residual, got ${r[4]}`);
+});
+
+test('residualByBand is flat when y does not depend on x', () => {
+  const xs = [1, 2, 3, 4, 5, 6, 7, 8];
+  const ys = [50, 50, 50, 50, 50, 50, 50, 50];
+  assert.deepEqual(residualByBand(xs, ys, 4), [0, 0, 0, 0, 0, 0, 0, 0]);
+});
+
+test('residualByBand handles an empty input', () => {
+  assert.deepEqual(residualByBand([], [], 5), []);
 });

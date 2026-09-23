@@ -28,7 +28,9 @@ So the map carries two readings and their difference:
 |---|---|
 | **Reported** | Raw recency- and severity-weighted density. What Peck's map shows. |
 | **Adjusted** | Encampment reports as a share of *all* reports from the same area, so reporting propensity divides out. `rho = -0.12` against other-complaint volume — effectively independent of it. |
-| **Disagreement** | Where the two part company. This is the interesting one. |
+| **Disagreement** | Where the two part company. |
+| **Walkable** | Bars, restaurants, coffee and parks within a walk, measured outward from each point. |
+| **Lively & calm** | Both axes at once. This is the one to look at. |
 
 Cells with too little evidence are **outlined, never filled**. A street nobody
 reports is unknown, not clean.
@@ -61,11 +63,60 @@ Green Lake and Lake City both jump under adjustment for partly this reason.
 Neither reading is correct alone, which is why both ship with a toggle rather
 than being blended into one number that pretends to be the truth.
 
+## Lively, and calm for it
+
+Amenity access comes from OpenStreetMap via Overpass: 3,577 bars, restaurants,
+cafes and parks, deduplicated by distance because OSM often carries a venue
+twice (once as a node, once as the building). Each is weighted by how far it is
+to walk - full credit inside five minutes, nothing past fifteen - and measured
+outward from each cell rather than counted inside it, since a res-9 hexagon is
+only ~330 m across.
+
+The naive move would be a map of "lively AND quiet". That mostly rediscovers a
+correlation: **liveliness and reported disorder run together at rho = 0.66**,
+partly because more genuinely happens on a busy street and partly because more
+people are present to file a report. So the second axis asks a fairer question:
+*among places with a comparable amount going on, which ones stay calmer?* Cells
+are banded by liveliness and scored against the median of their own band.
+
+### Does it agree with someone who knows the city?
+
+Three places the owner rates as both lively and pleasant, against places that
+are lively but rough, and calm but dull:
+
+```
+                              lively  calm
+  Queen Anne Ave & Boston       81    77     good
+  N 36th St & Phinney Ave         93    60     good
+  15th Ave E & E Mercer           93    45     good
+
+  group means:   good  n=3     89    61
+                 rough n=4     98    42
+                 dull  n=3     60    64
+```
+
+The named places land between the extremes - lively, but not maximally so, and
+calm for that level. `npm run sweet-spots` reproduces it.
+
+Coordinates matter more than expected here: guessed ones were out by 150-500 m,
+which is a whole hexagon, and that alone flipped the verdict on two anchors.
+Anchors are geocoded exactly - addresses through Nominatim, intersections via
+the shared Overpass node of two named ways (`npm run geocode`).
+
+### The honest limitation
+
+Liveliness counts *venues*, not *people*. Twenty empty restaurants score the
+same as eight packed ones. Foot traffic would be the better measure, and would
+also supply the missing denominator for the rho = 0.66 confound - reports per
+person present rather than per acre. Google's Popular Times is not available
+through any sanctioned API, so that remains open. See the notes in
+`scripts/check.mjs` for the correlations this rests on.
+
 ## Running it
 
 ```sh
 npm install
-npm run ingest      # ~425k reports -> public/data/cells.geojson, then syncs extension/
+npm run ingest      # ~425k reports + 3.5k OSM venues -> cells.geojson, syncs extension/
 npm run serve       # http://localhost:8790
 npm test
 ```

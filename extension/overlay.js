@@ -1,7 +1,9 @@
 (function () {
-  const { projector, boundsFromUrl, sample, VIEW_META } = globalThis.Sidewalk;
+  const { projector, boundsFromUrl, sample, bivariateInk, VIEW_META } = globalThis.Sidewalk;
 
   const VIEW_COPY = {
+    sweet: 'Lively & calm',
+    walkable: 'Walkable',
     reported: 'Reported',
     adjusted: 'Adjusted',
     gap: 'Disagreement',
@@ -11,7 +13,7 @@
   let container = null;
   let canvas = null;
   let ctx = null;
-  let view = 'adjusted';
+  let view = 'sweet';
   let visible = true;
   let lastHref = '';
 
@@ -68,6 +70,7 @@
           `<button type="button" data-view="${k}"${k === view ? ' aria-current="true"' : ''}>${label}</button>`).join('')}
       </div>
       <div class="sidewalk-ramp"></div>
+      <div class="sidewalk-biv" hidden></div>
       <div class="sidewalk-ends"><span></span><span></span></div>
       <p class="sidewalk-status"></p>`;
     host.appendChild(panel);
@@ -90,13 +93,30 @@
 
   function syncLegend() {
     const meta = VIEW_META[view];
-    const ramp = meta.ramp;
-    const lo = ramp[0][0], hi = ramp[ramp.length - 1][0];
-    const stops = ramp.map(([p, c]) => `${c} ${(((p - lo) / (hi - lo)) * 100).toFixed(1)}%`);
-    const el = document.querySelector('.sidewalk-ramp');
-    if (!el) return;
-    el.style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
+    const ramp1 = document.querySelector('.sidewalk-ramp');
+    const biv = document.querySelector('.sidewalk-biv');
     const ends = document.querySelectorAll('.sidewalk-ends span');
+    if (!ramp1) return;
+
+    ramp1.hidden = !!meta.bivariate;
+    biv.hidden = !meta.bivariate;
+    if (meta.bivariate) {
+      if (!biv.childElementCount) {
+        for (const calm of [100, 50, 0]) {
+          for (const lively of [0, 50, 100]) {
+            const i = document.createElement('i');
+            i.style.background = `rgb(${bivariateInk(lively, calm).join(',')})`;
+            biv.appendChild(i);
+          }
+        }
+      }
+      ends[0].textContent = 'more to walk to \u2192';
+      ends[1].textContent = '\u2191 calmer for it';
+      return;
+    }
+    const lo = meta.ramp[0][0], hi = meta.ramp[meta.ramp.length - 1][0];
+    const stops = meta.ramp.map(([p, c]) => `${c} ${(((p - lo) / (hi - lo)) * 100).toFixed(1)}%`);
+    ramp1.style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
     ends[0].textContent = meta.lo;
     ends[1].textContent = meta.hi;
   }
@@ -109,9 +129,21 @@
   // Over Zillow's light basemap a dark ramp would paint "few reports" as heavy
   // blotches, which reads backwards. Drive opacity from the value instead, so
   // quiet areas simply show Zillow's own map through.
-  function alphaFor(value) {
-    if (view === 'gap') return Math.min(0.55, Math.abs(value) / 40 * 0.55);
-    return 0.06 + (Math.max(0, Math.min(100, value)) / 100) * 0.46;
+  function paintFor(props, meta) {
+    if (meta.bivariate) {
+      const lively = meta.value(props), calm = meta.second(props);
+      // Curved rather than linear: Zillow's listings have to stay readable
+      // through the middle of the range, so only genuinely good cells tint hard.
+      return {
+        fill: `rgb(${bivariateInk(lively, calm).join(',')})`,
+        alpha: 0.04 + (((lively + calm) / 200) ** 1.6) * 0.44,
+      };
+    }
+    const value = meta.value(props);
+    const alpha = view === 'gap'
+      ? Math.min(0.5, (Math.abs(value) / 40) * 0.5)
+      : 0.04 + ((Math.max(0, Math.min(100, value)) / 100) ** 1.4) * 0.42;
+    return { fill: sample(meta.ramp, value), alpha };
   }
 
   function draw() {
@@ -140,8 +172,7 @@
     for (const f of features) {
       const [w, s, e, n] = f.bbox;
       if (e < bounds.west || w > bounds.east || n < bounds.south || s > bounds.north) continue;
-      const value = meta.value(f.props);
-      const alpha = alphaFor(value);
+      const { fill, alpha } = paintFor(f.props, meta);
       if (alpha < 0.02) continue;
 
       ctx.beginPath();
@@ -152,7 +183,7 @@
       }
       ctx.closePath();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = sample(meta.ramp, value);
+      ctx.fillStyle = fill;
       ctx.fill();
       drawn++;
     }

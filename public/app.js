@@ -1,24 +1,31 @@
-const { SEQ, DIV, projector, sample } = globalThis.Sidewalk;
+const { SEQ, DIV, AMEN, sample, bivariate, BIV, VIEW_META } = globalThis.Sidewalk;
 
-const VIEWS = {
-  reported: {
-    ramp: SEQ, lo: 'Few reports', hi: 'Many',
-    expr: ['get', 'intensity'],
-    explainer: 'Raw report density, the way the city’s own data reads it. A neighbourhood that reports more of everything looks worse here.',
-  },
-  adjusted: {
-    ramp: SEQ, lo: 'Below city mix', hi: 'Above',
-    expr: ['get', 'composition'],
-    explainer: 'Encampment reports as a share of all reports from the same area, so how readily a neighbourhood picks up the phone divides out.',
-  },
-  gap: {
-    ramp: DIV, lo: 'Count overstates', hi: 'Count understates',
-    expr: ['-', ['get', 'composition'], ['get', 'intensity']],
-    explainer: 'Where the two readings part company. Rose: worse than the raw count suggests. Teal: the raw count is inflated — usually a neighbourhood that reports everything, loudly.',
-  },
+const COPY = {
+  reported: 'Raw report density, the way the city\u2019s own data reads it. A neighbourhood that reports more of everything looks worse here.',
+  adjusted: 'Encampment reports as a share of all reports from the same area, so how readily a neighbourhood picks up the phone divides out.',
+  gap: 'Where the two readings part company. Rose: worse than the raw count suggests. Teal: the raw count is inflated \u2014 usually a neighbourhood that reports everything, loudly.',
+  walkable: 'Bars, restaurants, coffee and parks within a walk, counted from this point outward rather than by what sits inside the cell.',
+  sweet: 'Lively places report more disorder, partly because more people are there to report it. So this asks a fairer question: among places with a comparable amount going on, which stay calmer? White is both.',
 };
 
-const colourExpr = (v) => ['interpolate', ['linear'], v.expr, ...v.ramp.flat()];
+const EXPR = {
+  reported: ['get', 'intensity'],
+  adjusted: ['get', 'composition'],
+  gap: ['-', ['get', 'composition'], ['get', 'intensity']],
+  walkable: ['get', 'amenity'],
+};
+const VIEWS = Object.fromEntries(Object.entries(VIEW_META)
+  .map(([k, v]) => [k, { ...v, expr: EXPR[k], explainer: COPY[k] }]));
+
+const pct = (field) => ['^', ['/', ['get', field], 100], BIV.gamma];
+// Built from the same coefficients the canvas overlay uses, so the two
+// renderers cannot drift apart.
+const bivariateExpr = () => ['rgb', ...[0, 1, 2].map((i) => [
+  'min', 255, ['+', BIV.base[i], ['*', pct('amenity'), BIV.lively[i]], ['*', pct('calm'), BIV.calm[i]]],
+])];
+const colourExpr = (v) => (v.bivariate
+  ? bivariateExpr()
+  : ['interpolate', ['linear'], ['to-number', v.expr ?? 0], ...v.ramp.flat()]);
 const cssRamp = (ramp) => {
   const lo = ramp[0][0], hi = ramp[ramp.length - 1][0];
   const stops = ramp.map(([p, c]) => `${c} ${(((p - lo) / (hi - lo)) * 100).toFixed(1)}%`);
@@ -48,6 +55,9 @@ const map = new maplibregl.Map({
   },
 });
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+// Exposed so the screenshot harness (and the console) can drive the camera.
+globalThis.Sidewalk.map = map;
 
 const $ = (s) => document.querySelector(s);
 let data = null;
@@ -93,7 +103,7 @@ map.on('load', async () => {
 
   frameToData();
   renderSummary();
-  setView('reported');
+  setView('sweet');
 });
 
 // Frame the data rather than a hardcoded centre, leaving room for the rail so
@@ -140,29 +150,43 @@ function parseTypes(value) {
   try { return JSON.parse(value); } catch { return {}; }
 }
 
+function verdictFor(p) {
+  if (p.conf === 'low') return 'Too few reports of any kind here to tell a quiet street from an unreported one.';
+  if (p.amenity >= 70 && p.calm >= 65) return 'Plenty in reach, and calmer than most places with this much going on.';
+  if (p.amenity >= 70 && p.calm < 45) return 'Plenty in reach, and it shows: busier with reports than its peers.';
+  if (p.amenity < 40 && p.calm >= 65) return 'Calm, but there is little here to walk to.';
+  if (p.amenity < 40) return 'Little in reach, and still more reported than comparable places.';
+  return 'Middling on both counts.';
+}
+
 function renderCell(p) {
-  const gap = p.composition - p.intensity;
-  // MapLibre serialises nested feature properties to JSON strings, so this
-  // comes back as text rather than the object the ingest wrote.
+  // MapLibre serialises nested feature properties to JSON strings, so these
+  // come back as text rather than the objects the ingest wrote.
   const types = Object.entries(parseTypes(p.types)).sort((a, b) => b[1] - a[1]);
-  const verdict = p.conf === 'low'
-    ? 'Too few reports of any kind here to tell a quiet street from an unreported one.'
-    : gap > 12 ? 'Worse than the raw count suggests — this area reports little else.'
-    : gap < -12 ? 'The raw count overstates this. It reports everything, loudly.'
-    : 'Both readings agree on this one.';
+  const access = parseTypes(p.access);
+  const bivColour = `rgb(${bivariate(p.amenity, p.calm).join(',')})`;
 
   $('#cell').innerHTML = `
     <h2>${p.enc.toLocaleString()} encampment ${p.enc === 1 ? 'report' : 'reports'}</h2>
-    <p class="sub">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)} · about 0.1 km² · ${p.conf} confidence</p>
+    <p class="sub">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)} \u00b7 about 0.1 km\u00b2 \u00b7 ${p.conf} confidence</p>
     <dl class="rows">
+      <div class="row"><dt>Lively</dt><dd>${p.amenity}<em> / 100</em></dd></div>
+      ${bar(p.amenity, rampColour(AMEN, p.amenity))}
+      <div class="row"><dt>Calm for that</dt><dd>${p.calm}<em> / 100</em></dd></div>
+      ${bar(p.calm, bivColour)}
       <div class="row"><dt>Reported</dt><dd>${p.intensity}<em> / 100</em></dd></div>
       ${bar(p.intensity, rampColour(SEQ, p.intensity))}
       <div class="row"><dt>Adjusted</dt><dd>${p.composition}<em> / 100</em></dd></div>
       ${bar(p.composition, rampColour(SEQ, p.composition))}
-      <div class="row"><dt>Encampment share</dt><dd>${((p.enc / Math.max(1, p.total)) * 100).toFixed(0)}%<em> of ${p.total.toLocaleString()}</em></dd></div>
-      <div class="row"><dt>Versus city mix</dt><dd>${p.ratio.toFixed(2)}×</dd></div>
     </dl>
-    <p class="hint" style="margin-top:14px">${verdict}</p>
+    <p class="hint" style="margin-top:14px">${verdictFor(p)}</p>
+    <div class="access">
+      <p class="hint" style="margin:0 0 10px">Within a walk, fading to nothing at fifteen minutes:</p>
+      <dl class="rows">
+        ${[['bars', 'Bars and pubs'], ['food', 'Restaurants'], ['coffee', 'Coffee'], ['parks', 'Parks']]
+          .map(([k, label]) => `<div class="row"><dt>${label}</dt><dd>${Math.round(access[k] ?? 0)}</dd></div>`).join('')}
+      </dl>
+    </div>
     ${types.length ? `<div class="types"><dl class="rows">${types.map(([t, n]) =>
       `<div class="row"><dt>${t}</dt><dd>${n.toLocaleString()}</dd></div>`).join('')}</dl></div>` : ''}
   `;
@@ -172,7 +196,7 @@ function renderSummary() {
   const m = data.metadata;
   $('#cell').innerHTML = `
     <h2>${m.encampmentReports.toLocaleString()} encampment reports</h2>
-    <p class="sub">and ${m.disorderReports.toLocaleString()} reports of dumping, graffiti, litter, abandoned vehicles and dark streetlights</p>
+    <p class="sub">and ${m.disorderReports.toLocaleString()} reports of dumping, graffiti, litter, abandoned vehicles and dark streetlights, against ${m.amenities.toLocaleString()} bars, restaurants, cafes and parks</p>
     <p class="hint">Point at any cell to read it. Recent reports count for more than old ones — encampments move, and the city sweeps them.</p>
   `;
 }
@@ -180,10 +204,28 @@ function renderSummary() {
 function setView(name) {
   const v = VIEWS[name];
   map.setPaintProperty('cells-fill', 'fill-color', colourExpr(v));
-  $('#ramp').style.background = cssRamp(v.ramp);
-  $('#ramp-lo').textContent = v.lo;
-  $('#ramp-hi').textContent = v.hi;
+  $('#ramp-key').hidden = !!v.bivariate;
+  $('#biv-key').hidden = !v.bivariate;
+  if (v.bivariate) buildBivKey();
+  else {
+    $('#ramp').style.background = cssRamp(v.ramp);
+    $('#ramp-lo').textContent = v.lo;
+    $('#ramp-hi').textContent = v.hi;
+  }
   $('#explainer').textContent = v.explainer;
+}
+
+// Nine swatches: calm rising up the grid, liveliness rising across it.
+function buildBivKey() {
+  const grid = $('#biv-grid');
+  if (grid.childElementCount) return;
+  for (const calm of [100, 50, 0]) {
+    for (const lively of [0, 50, 100]) {
+      const i = document.createElement('i');
+      i.style.background = `rgb(${bivariate(lively, calm).join(',')})`;
+      grid.appendChild(i);
+    }
+  }
 }
 
 document.querySelectorAll('input[name=view]').forEach((el) => {

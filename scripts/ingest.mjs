@@ -1,6 +1,7 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { latLngToCell, cellToBoundary, cellToLatLng, gridDisk } from 'h3-js';
-import { encampmentSeverity, recencyWeight, compositionRatio, percentileRanks, confidence, DISORDER_WEIGHTS } from '../src/score.mjs';
+import { encampmentSeverity, recencyWeight, compositionRatio, percentileRanks, confidence, residualByBand, DISORDER_WEIGHTS } from '../src/score.mjs';
+import { categoryOf, dedupe, accessFrom, livelinessFrom } from '../src/amenity.mjs';
 
 const RES = 9;
 const WINDOW_DAYS = 365;
@@ -13,6 +14,50 @@ const ENCAMPMENT = {
   select: 'createddate,latitude,longitude,aretherepeoplepresent,aretheretentsstructuresortarps,aretherervscarsmiscvehicles,istheencampmentblockingaccess,istheretrashordebris',
 };
 const DISORDER = { id: '43nw-pkdq', select: 'createddate,latitude,longitude,servicerequesttype' };
+
+const BBOX = [47.48, -122.44, 47.75, -122.22];
+const OVERPASS = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_QUERY = `[out:json][timeout:180];
+(
+  nwr["amenity"~"^(cafe|restaurant|fast_food|bar|pub|biergarten|nightclub)$"](${BBOX});
+  nwr["shop"="coffee"](${BBOX});
+  nwr["leisure"="park"](${BBOX});
+);
+out center tags;`;
+
+// Ways and relations come back with a computed centre rather than lat/lon.
+async function fetchAmenities() {
+  mkdirSync(CACHE, { recursive: true });
+  const cacheFile = `${CACHE}osm-amenities.json`;
+  let elements;
+  if (existsSync(cacheFile)) {
+    elements = JSON.parse(readFileSync(cacheFile, 'utf8'));
+    console.log(`  overpass: ${elements.length} elements (cached)`);
+  } else {
+    const res = await fetch(OVERPASS, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'sidewalk-map/0.1 (personal apartment search)' },
+      body: new URLSearchParams({ data: OVERPASS_QUERY }),
+    });
+    if (!res.ok) throw new Error(`overpass HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    elements = (await res.json()).elements;
+    writeFileSync(cacheFile, JSON.stringify(elements));
+    console.log(`  overpass: ${elements.length} elements`);
+  }
+
+  const pois = [];
+  for (const el of elements) {
+    const category = categoryOf(el.tags);
+    if (!category) continue;
+    const lat = el.lat ?? el.center?.lat;
+    const lng = el.lon ?? el.center?.lon;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    pois.push({ category, lat, lng });
+  }
+  const unique = dedupe(pois);
+  console.log(`  amenities: ${unique.length} venues and parks (${pois.length - unique.length} duplicates dropped)`);
+  return unique;
+}
 
 const since = new Date(Date.now() - WINDOW_DAYS * 864e5).toISOString().slice(0, 19);
 
@@ -60,7 +105,7 @@ function bin(rows, fn) {
 }
 
 console.log(`Ingesting Seattle, ${WINDOW_DAYS}d window since ${since.slice(0, 10)}`);
-const [encRows, disRows] = await Promise.all([fetchAll(ENCAMPMENT), fetchAll(DISORDER)]);
+const [encRows, disRows, pois] = await Promise.all([fetchAll(ENCAMPMENT), fetchAll(DISORDER), fetchAmenities()]);
 
 const enc = bin(encRows, (c, r, w) => {
   c.count++;
@@ -74,8 +119,11 @@ const dis = bin(disRows, (c, r, w) => {
 });
 console.log(`  binned: ${enc.cells.size} encampment cells (${enc.skipped} rows skipped), ${dis.cells.size} disorder cells (${dis.skipped} skipped)`);
 
-// One row per cell that either dataset touched.
-const keys = [...new Set([...enc.cells.keys(), ...dis.cells.keys()])];
+// One row per cell that any source touched. Amenity cells are unioned in so a
+// lively block that nobody has ever filed a report about still appears - those
+// are exactly the places this map is meant to surface.
+const amenityCells = new Set(pois.map((p) => latLngToCell(p.lat, p.lng, RES)));
+const keys = [...new Set([...enc.cells.keys(), ...dis.cells.keys(), ...amenityCells])];
 const rowFor = (h3) => {
   const e = enc.cells.get(h3) ?? { count: 0, weighted: 0, types: {} };
   const d = dis.cells.get(h3) ?? { count: 0, weighted: 0, types: {} };
@@ -120,6 +168,30 @@ rows.forEach((r, i) => {
 // file for no visible difference.
 const round5 = (pair) => [+pair[0].toFixed(5), +pair[1].toFixed(5)];
 
+// Walkable access is measured from each cell's centre out to real venues, not
+// by counting what happens to sit inside the cell: a res-9 hexagon is ~330m
+// across, so a bar one cell over is still a two-minute walk.
+console.log('  scoring walkable amenity access...');
+for (const r of rows) {
+  const [lat, lng] = cellToLatLng(r.h3);
+  r.access = accessFrom(lat, lng, pois);
+  r.liveliness = livelinessFrom(r.access);
+}
+const amenityPct = percentileRanks(rows.map((r) => r.liveliness));
+rows.forEach((r, i) => { r.amenityPct = Math.round(amenityPct[i]); });
+
+// What you would actually see underfoot: encampment presence and street grime
+// (dumping, graffiti, litter) weigh equally. Both are absolute, and both carry
+// the engagement bias - which is the point of the residual below.
+const grimePct = percentileRanks(rows.map((r) => r.intensityPct + r.disorderPct));
+rows.forEach((r, i) => { r.grimePct = Math.round(grimePct[i]); });
+
+// Calm *for its liveliness*. A negative residual means fewer reports than
+// places with a comparable amount going on, so flip the sign: high = calmer.
+const residual = residualByBand(rows.map((r) => r.amenityPct), rows.map((r) => r.grimePct), 10);
+const calmPct = percentileRanks(residual.map((v) => -v));
+rows.forEach((r, i) => { r.calmPct = Math.round(calmPct[i]); r.residual = Math.round(residual[i]); });
+
 const features = rows.map((r) => {
   const [lat, lng] = cellToLatLng(r.h3);
   const ring = cellToBoundary(r.h3, true).map(round5);
@@ -131,6 +203,9 @@ const features = rows.map((r) => {
       lat: +lat.toFixed(5), lng: +lng.toFixed(5),
       enc: r.encCount, dis: r.disCount, total: r.total,
       intensity: r.intensityPct, disorder: r.disorderPct, composition: r.compositionPct,
+      amenity: r.amenityPct, grime: r.grimePct, calm: r.calmPct, residual: r.residual,
+      liveliness: +r.liveliness.toFixed(2),
+      access: Object.fromEntries(Object.entries(r.access).map(([k, v]) => [k, +v.toFixed(2)])),
       ratio: +r.composition.toFixed(3),
       conf: r.confidence,
       types: r.types,
@@ -145,7 +220,8 @@ const out = {
     windowDays: WINDOW_DAYS, halfLifeDays: HALF_LIFE, resolution: RES,
     cityShare: +cityShare.toFixed(4),
     encampmentReports: cityEnc, disorderReports: cityAll - cityEnc, cells: rows.length,
-    sources: { encampment: ENCAMPMENT.id, disorder: DISORDER.id },
+    amenities: pois.length,
+    sources: { encampment: ENCAMPMENT.id, disorder: DISORDER.id, amenities: 'OpenStreetMap via Overpass' },
   },
   features,
 };

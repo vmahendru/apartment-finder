@@ -143,3 +143,23 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+.views { grid-template-columns: repeat(6, 1fr); }
+.views label { grid-column: span 2; }
+.views label.wide { grid-column: span 3; }
+/* The first cell of each row has no divider to its left. */
+.views label:nth-child(3) span { border-left: 0; }
+
+.biv-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 2px; width: 84px;
+}
+.biv-grid i { display: block; aspect-ratio: 1; }
+.biv-axes {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 8px 0 0; font-size: 11.5px; color: var(--fog);
+}
+
+.access { margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--hair); }
+.access .row dd { font-size: 13.5px; }
+.access .row dd em { font-size: 12px; }

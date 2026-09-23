@@ -60,11 +60,45 @@
     return ramp[ramp.length - 1][1];
   }
 
+  // Amenity access gets its own hue. Reusing the sodium ramp would say "more
+  // is worse", which is backwards for bars and coffee.
+  const AMEN = [[0, '#1C1A28'], [33, '#5A2A55'], [66, '#A8417A'], [100, '#F58BB8']];
+
+  // Two axes mixed the way light mixes: magenta for how much is around, cyan
+  // for how calm it is given that. Dark = neither, and the places that are
+  // both are the brightest thing on the map.
+  // Balanced so the two single-axis corners land at similar brightness (~140)
+  // and only the both-high corner reaches white. Shared with the map's own
+  // colour expression so the two renderers cannot drift apart.
+  // gamma: both axes are percentile ranks, so they are uniform by construction
+  // and a linear mix leaves most of the city in a washed-out middle. Squaring
+  // pushes the mid-range back down so only genuinely high values light up.
+  const BIV = { base: [22, 30, 48], lively: [210, 75, 140], calm: [34, 140, 150], gamma: 2 };
+
+  function bivariate(lively, calm) {
+    const a = (Math.max(0, Math.min(100, lively)) / 100) ** BIV.gamma;
+    const s = (Math.max(0, Math.min(100, calm)) / 100) ** BIV.gamma;
+    return BIV.base.map((b, i) => Math.round(Math.min(255, b + a * BIV.lively[i] + s * BIV.calm[i])));
+  }
+
+  // The dark map mixes light: both axes high goes to white. Over Zillow's pale
+  // basemap that is invisible, so there the same two hues mix as ink on paper
+  // and both-high goes to a deep indigo - the most visible thing on the page.
+  const INK = { lively: [20, 190, 60], calm: [200, 25, 30], gamma: 2 };
+
+  function bivariateInk(lively, calm) {
+    const a = (Math.max(0, Math.min(100, lively)) / 100) ** INK.gamma;
+    const s = (Math.max(0, Math.min(100, calm)) / 100) ** INK.gamma;
+    return [0, 1, 2].map((i) => Math.round(Math.max(0, 255 - a * INK.lively[i] - s * INK.calm[i])));
+  }
+
   const VIEW_META = {
     reported: { ramp: SEQ, lo: 'Few reports', hi: 'Many', value: (p) => p.intensity },
     adjusted: { ramp: SEQ, lo: 'Below city mix', hi: 'Above', value: (p) => p.composition },
     gap: { ramp: DIV, lo: 'Count overstates', hi: 'Count understates', value: (p) => p.composition - p.intensity },
+    walkable: { ramp: AMEN, lo: 'Little in reach', hi: 'Plenty', value: (p) => p.amenity },
+    sweet: { bivariate: true, value: (p) => p.amenity, second: (p) => p.calm },
   };
 
-  root.Sidewalk = { mercY, projector, boundsFromUrl, SEQ, DIV, sample, VIEW_META };
+  root.Sidewalk = { mercY, projector, boundsFromUrl, SEQ, DIV, AMEN, sample, bivariate, bivariateInk, BIV, INK, VIEW_META };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

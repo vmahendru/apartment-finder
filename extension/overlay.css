@@ -41,3 +41,13 @@
 .sidewalk-status { margin: 9px 0 0; font-size: 11.5px; color: #7E8C99; }
 
 @media (prefers-reduced-motion: reduce) { .sidewalk-panel * { transition: none !important; } }
+
+.sidewalk-views { grid-template-columns: repeat(6, 1fr); }
+.sidewalk-views button { grid-column: span 2; }
+.sidewalk-views button:nth-child(1),
+.sidewalk-views button:nth-child(2) { grid-column: span 3; }
+.sidewalk-views button:nth-child(3) { border-left: 0; }
+
+.sidewalk-biv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; width: 60px; }
+.sidewalk-biv i { display: block; aspect-ratio: 1; }
+.sidewalk-ends { flex-direction: column; gap: 1px; align-items: flex-start; }

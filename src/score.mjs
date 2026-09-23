@@ -117,3 +117,32 @@ export const DISORDER_WEIGHTS = {
   'Abandoned Vehicle': 0.5,
   'Streetlight Repair': 0.3,
 };
+
+const median = (values) => {
+  const v = [...values].sort((a, b) => a - b);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+};
+
+// Lively places report more disorder, partly because more happens there and
+// partly because more people are present to report it (rho ~ 0.66). So asking
+// "lively AND quiet" in absolute terms mostly rediscovers that correlation.
+// The useful question is the residual: among places with a comparable amount
+// going on, which ones are calmer than their peers?
+//
+// Banding by rank rather than fitting a line: the relationship is not linear,
+// and a median within a band shrugs off the downtown outliers.
+export function residualByBand(xs, ys, bands = 10) {
+  const n = xs.length;
+  if (n === 0) return [];
+  const order = xs.map((x, i) => [x, i]).sort((a, b) => a[0] - b[0]);
+  const bandOf = new Array(n);
+  const members = Array.from({ length: bands }, () => []);
+  order.forEach(([, idx], rank) => {
+    const b = Math.min(bands - 1, Math.floor((rank / n) * bands));
+    bandOf[idx] = b;
+    members[b].push(ys[idx]);
+  });
+  const baseline = members.map((m) => (m.length ? median(m) : 0));
+  return ys.map((y, i) => y - baseline[bandOf[i]]);
+}

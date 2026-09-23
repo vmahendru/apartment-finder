@@ -9,7 +9,9 @@
     "check": "node scripts/check.mjs",
     "build:extension": "node scripts/build-extension.mjs",
     "serve": "node scripts/serve.mjs",
-    "test": "node --test \"test/**/*.test.mjs\""
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "sweet-spots": "node scripts/sweet-spots.mjs",
+    "geocode": "node scripts/geocode.mjs"
   },
   "dependencies": {
     "h3-js": "^4.1.0",
