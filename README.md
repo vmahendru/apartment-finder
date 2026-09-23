@@ -103,6 +103,39 @@ which is a whole hexagon, and that alone flipped the verdict on two anchors.
 Anchors are geocoded exactly - addresses through Nominatim, intersections via
 the shared Overpass node of two named ways (`npm run geocode`).
 
+### Looking up one address
+
+```sh
+npm run look-up -- "15th Ave E & E Mercer St, Seattle, WA"
+```
+
+Geocodes exactly, scores the point rather than whichever hexagon it lands in,
+and breaks the reports down **by direction**. That last part matters more than
+the summary number, because Seattle streets are often boundaries. 15th Ave E is
+one: to the north-east of that address the surrounding cells hold 8 encampment
+reports, while 400m west toward Broadway they hold 363 and 560m north at
+Volunteer Park's edge 494.
+
+For this reason the pipeline stores two versions of grime and calm. The
+smoothed pair (`grime`, `calm`) reads better at city scale and drives the map.
+The unsmoothed pair (`grimeLocal`, `calmLocal`) is the honest answer at address
+scale, because encampment reports cluster sharply - one greenbelt, one block
+under an overpass - and neighbour-smoothing spreads that across streets that
+are genuinely clean.
+
+### Where it is still weak
+
+At H3 resolution 9 a cell is ~330m across, which is wider than the pocket that
+makes an address pleasant. The score is neutral (~50) on 15th & Mercer even
+though the block-level evidence is good, because the cell and its neighbours
+straddle both the quiet east side and the transition toward Broadway.
+Resolution 10 (~130m) would resolve it, at roughly 7x the cells.
+
+Weighting is not the cause: scoring grime on encampments alone, on encampments
+plus 311 disorder, or on a 2:1 blend separates the ground-truth anchors almost
+identically (22.3, 22.4 and 23.7 points of separation between the good and
+rough groups).
+
 ### The honest limitation
 
 Liveliness counts *venues*, not *people*. Twenty empty restaurants score the

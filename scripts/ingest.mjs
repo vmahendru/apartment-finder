@@ -192,6 +192,22 @@ const residual = residualByBand(rows.map((r) => r.amenityPct), rows.map((r) => r
 const calmPct = percentileRanks(residual.map((v) => -v));
 rows.forEach((r, i) => { r.calmPct = Math.round(calmPct[i]); r.residual = Math.round(residual[i]); });
 
+// The same pair again, but unsmoothed. Encampment reports cluster sharply - a
+// greenbelt, one block under an overpass - and neighbour-smoothing spreads that
+// across streets that are genuinely clean. Smoothed reads better at city scale;
+// unsmoothed is the honest answer to "what about this address". 15th Ave E is
+// the case in point: the blocks east of it are near-empty while a cell 400m
+// west carries hundreds of reports.
+const encLocalPct = percentileRanks(rows.map((r) => r.encWeighted));
+const disLocalPct = percentileRanks(rows.map((r) => r.disWeighted));
+const grimeLocalPct = percentileRanks(rows.map((_, i) => encLocalPct[i] + disLocalPct[i]));
+const residualLocal = residualByBand(rows.map((r) => r.amenityPct), grimeLocalPct, 10);
+const calmLocalPct = percentileRanks(residualLocal.map((v) => -v));
+rows.forEach((r, i) => {
+  r.grimeLocalPct = Math.round(grimeLocalPct[i]);
+  r.calmLocalPct = Math.round(calmLocalPct[i]);
+});
+
 const features = rows.map((r) => {
   const [lat, lng] = cellToLatLng(r.h3);
   const ring = cellToBoundary(r.h3, true).map(round5);
@@ -204,6 +220,7 @@ const features = rows.map((r) => {
       enc: r.encCount, dis: r.disCount, total: r.total,
       intensity: r.intensityPct, disorder: r.disorderPct, composition: r.compositionPct,
       amenity: r.amenityPct, grime: r.grimePct, calm: r.calmPct, residual: r.residual,
+      grimeLocal: r.grimeLocalPct, calmLocal: r.calmLocalPct,
       liveliness: +r.liveliness.toFixed(2),
       access: Object.fromEntries(Object.entries(r.access).map(([k, v]) => [k, +v.toFixed(2)])),
       ratio: +r.composition.toFixed(3),
