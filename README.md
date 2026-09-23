@@ -109,13 +109,13 @@ are lively but rough, and calm but dull:
 
 ```
                               lively  calm
-  Queen Anne Ave & Boston       81    77     good
-  N 36th St & Phinney Ave         93    60     good
-  15th Ave E & E Mercer           93    45     good
+  Queen Anne Ave & Boston         73    83     good
+  N 36th St & Phinney Ave         92    68     good
+  15th Ave E & E Mercer           90    40     good
 
-  group means:   good  n=3     89    61
-                 rough n=4     98    42
-                 dull  n=3     60    64
+  group means:   good  n=3     85    64
+                 rough n=4     97    44
+                 dull  n=3     48    66
 ```
 
 The named places land between the extremes - lively, but not maximally so, and
@@ -135,9 +135,9 @@ npm run look-up -- "15th Ave E & E Mercer St, Seattle, WA"
 Geocodes exactly, scores the point rather than whichever hexagon it lands in,
 and breaks the reports down **by direction**. That last part matters more than
 the summary number, because Seattle streets are often boundaries. 15th Ave E is
-one: to the north-east of that address the surrounding cells hold 8 encampment
-reports, while 400m west toward Broadway they hold 363 and 560m north at
-Volunteer Park's edge 494.
+one: north-east of it the surrounding cells hold a handful of encampment
+reports between them, while west toward Broadway and north at Volunteer Park's
+edge they hold hundreds.
 
 For this reason the pipeline stores two versions of grime and calm. The
 smoothed pair (`grime`, `calm`) reads better at city scale and drives the map.

@@ -112,10 +112,9 @@
     const emph = document.querySelector('.sidewalk-emphasis');
     if (!ramp1) return;
 
-    // The two-dimensional view already puts its emphasis on the good corner,
-    // and the disagreement view has no good end, so the choice only applies
-    // to the plain scales.
-    emph.hidden = !!(meta.bivariate || meta.diverging);
+    // Disagreement has no good end, so inverting it would mean nothing. Every
+    // other view can be negated, the two-dimensional one included.
+    emph.hidden = !!meta.diverging;
 
     ramp1.hidden = !!meta.bivariate;
     biv.hidden = !meta.bivariate;
@@ -131,11 +130,11 @@
             biv.appendChild(i);
           }
         }
-        // Four named corners. An axis arrow assumes the reader already knows
-        // what the two dimensions are; naming them does not.
-        key.innerHTML = BIV_KEY.map(([corner, label]) =>
-          `<div><dt style="background:rgb(${CORNERS.light[corner].join(',')})"></dt><dd>${label}</dd></div>`).join('');
       }
+      // Four named corners, relabelled when the view is negated. An axis arrow
+      // assumes the reader already knows what the two dimensions are.
+      key.innerHTML = BIV_KEY[emphasis === 'trouble' ? 'inverted' : 'normal'].map(([corner, label]) =>
+        `<div><dt style="background:rgb(${CORNERS.light[corner].join(',')})"></dt><dd>${label}</dd></div>`).join('');
       return;
     }
 
@@ -172,7 +171,11 @@
   // quiet areas simply show Zillow's own map through.
   function paintFor(props, meta) {
     if (meta.bivariate) {
-      const lively = meta.value(props), calm = meta.second(props);
+      // Negating both axes turns the emphasis inside out: the corner that was
+      // brightest is now bare, and the worst places carry the ink.
+      const flip = emphasis === 'trouble';
+      const lively = flip ? 100 - meta.value(props) : meta.value(props);
+      const calm = flip ? 100 - meta.second(props) : meta.second(props);
       // Curved rather than linear: Zillow's listings have to stay readable
       // through the middle of the range, so only genuinely good cells tint hard.
       return {

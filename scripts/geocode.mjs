@@ -34,7 +34,8 @@ for (const q of ['Fremont, Seattle, WA', 'Queen Anne, Seattle, WA']) {
 for (const [a, b] of [
   ['15th Avenue East', 'East Mercer Street'],
   ['East Pike Street', '11th Avenue'],
-  ['North 36th Street', 'Fremont Avenue North'],
+  ['North 36th Street', 'Phinney Avenue North'],
+  ['Queen Anne Avenue North', 'Boston Street'],
   ['Queen Anne Avenue North', 'West McGraw Street'],
 ]) {
   const r = await crossing(a, b);

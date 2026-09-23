@@ -1,4 +1,4 @@
-// Walk due west from 15th Ave E & E Mercer and print the profile. If resolution 10
+// Walk west to east through a point and print the profile. If resolution 10
 // bought anything, the step at 15th Ave E should be visible rather than
 // smeared across 330m.
 import { readFileSync } from 'node:fs';

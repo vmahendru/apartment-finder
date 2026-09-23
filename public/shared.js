@@ -111,12 +111,25 @@
   };
 
   // Plain language beats an axis arrow. These are the four corners named.
-  const BIV_KEY = [
-    ['both', 'Lots to walk to, and calm for it'],
-    ['lively', 'Lots to walk to, but rough for it'],
-    ['calm', 'Calm, but little to walk to'],
-    ['neither', 'Neither'],
-  ];
+  //
+  // Inverting negates both axes, so the corner that carries the emphasis goes
+  // from the best place to the worst one and the good places fade out instead.
+  // The colours do not move; what each corner *means* does, so the key has to
+  // be relabelled with it or the map lies.
+  const BIV_KEY = {
+    normal: [
+      ['both', 'Lots to walk to, and calm for it'],
+      ['lively', 'Lots to walk to, but rough for it'],
+      ['calm', 'Calm, but little to walk to'],
+      ['neither', 'Neither'],
+    ],
+    inverted: [
+      ['both', 'Little to walk to, and rough for it'],
+      ['lively', 'Little to walk to, but calm'],
+      ['calm', 'Lots to walk to, but rough for it'],
+      ['neither', 'Lots to walk to and calm \u2014 faded out'],
+    ],
+  };
 
   // goodIsLow says which end of the scale is the desirable one, so the overlay
   // can be asked to pick out good places rather than bad ones.

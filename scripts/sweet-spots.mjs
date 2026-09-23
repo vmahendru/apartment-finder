@@ -10,7 +10,7 @@ import { accessFrom, livelinessFrom, metresBetween, categoryOf, dedupe } from '.
 const ANCHORS = [
   ['15th Ave E & E Mercer',    47.62425, -122.31262, 'good'],
   ['N 36th St & Phinney Ave',  47.65226, -122.35448, 'good'],
-  ['Queen Anne Ave & Boston', 47.63839, -122.35692, 'good'],
+  ['Queen Anne Ave & Boston',  47.63839, -122.35692, 'good'],
 
   ['Pike & 11th',              47.61410, -122.31815, 'rough'],
   ['2nd & Bell (Belltown)',    47.61370, -122.34530, 'rough'],
