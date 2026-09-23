@@ -12,7 +12,8 @@
     "test": "node --test \"test/**/*.test.mjs\"",
     "sweet-spots": "node scripts/sweet-spots.mjs",
     "geocode": "node scripts/geocode.mjs",
-    "look-up": "node scripts/look-up.mjs"
+    "look-up": "node scripts/look-up.mjs",
+    "transect": "node scripts/transect.mjs"
   },
   "dependencies": {
     "h3-js": "^4.1.0",

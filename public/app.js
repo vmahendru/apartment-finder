@@ -169,13 +169,18 @@ function verdictFor(p) {
 function renderCell(p) {
   // MapLibre serialises nested feature properties to JSON strings, so these
   // come back as text rather than the objects the ingest wrote.
-  const types = Object.entries(parseTypes(p.types)).sort((a, b) => b[1] - a[1]);
+  // Types travel as one-letter codes with the mapping carried once in the
+  // metadata; at 12k cells the full names would add megabytes.
+  const names = data.metadata.typeNames ?? {};
+  const types = Object.entries(parseTypes(p.types))
+    .map(([code, n]) => [names[code] ?? code, n])
+    .sort((a, b) => b[1] - a[1]);
   const access = parseTypes(p.access);
   const bivColour = `rgb(${bivariate(p.amenity, p.calm).join(',')})`;
 
   $('#cell').innerHTML = `
     <h2>${p.enc.toLocaleString()} encampment ${p.enc === 1 ? 'report' : 'reports'}</h2>
-    <p class="sub">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)} \u00b7 about 0.1 km\u00b2 \u00b7 ${p.conf} confidence</p>
+    <p class="sub">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)} \u00b7 within ${data.metadata.localKm2 ?? 0.1} km\u00b2 \u00b7 ${p.conf} confidence</p>
     <dl class="rows">
       <div class="row"><dt>Lively</dt><dd>${p.amenity}<em> / 100</em></dd></div>
       ${bar(p.amenity, rampColour(AMEN, p.amenity))}

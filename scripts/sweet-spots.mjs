@@ -56,8 +56,8 @@ function readCells(lat, lng) {
   let wsum = 0, grime = 0, calm = 0, enc = 0, dis = 0;
   for (const c of cells) {
     const d = metresBetween(lat, lng, c.lat, c.lng);
-    if (d > 500) continue;
-    const w = 1 / (1 + (d / 180) ** 2);
+    if (d > 250) continue;
+    const w = 1 / (1 + (d / 120) ** 2);
     wsum += w; grime += w * c.grime; calm += w * c.calm; enc += w * c.enc; dis += w * c.dis;
   }
   return wsum ? { grime: grime / wsum, calm: calm / wsum, enc: enc / wsum, dis: dis / wsum } : null;

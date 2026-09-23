@@ -40,7 +40,7 @@ const lively = (lo / sorted.length) * 100;
 // "how is this address".
 const RADIUS_M = 250;
 let wsum = 0;
-const acc = { grimeLocal: 0, calmLocal: 0, grime: 0, calm: 0, enc: 0, dis: 0 };
+const acc = { grimeLocal: 0, calmLocal: 0, grime: 0, calm: 0, enc: 0, dis: 0, encPct: 0, disPct: 0 };
 const near = [];
 for (const c of cells) {
   const d = metresBetween(lat, lng, c.lat, c.lng);
@@ -59,6 +59,11 @@ console.log(`${lat.toFixed(5)}, ${lng.toFixed(5)}\n`);
 console.log(`  Lively            ${String(Math.round(lively)).padStart(3)}  ${bar(lively)}`);
 console.log(`  Calm (this block) ${String(Math.round(acc.calmLocal)).padStart(3)}  ${bar(acc.calmLocal)}`);
 console.log(`  Calm (the area)   ${String(Math.round(acc.calm)).padStart(3)}  ${bar(acc.calm)}`);
+console.log(`\n  What drives that, separately (100 = worst in the city):`);
+console.log(`    Encampments     ${String(Math.round(acc.encPct)).padStart(3)}  ${bar(acc.encPct)}`);
+console.log(`    Street grime    ${String(Math.round(acc.disPct)).padStart(3)}  ${bar(acc.disPct)}`);
+console.log(`    (grime is dumping, graffiti, litter, abandoned vehicles, dark streetlights;`);
+console.log(`     any commercial strip generates it whatever else is true of the place)`);
 console.log(`\n  Within a walk (fading to nothing at fifteen minutes):`);
 for (const [k, label] of Object.entries(CATEGORY_LABELS)) {
   console.log(`    ${label.padEnd(16)} ${String(Math.round(access[k])).padStart(3)}`);

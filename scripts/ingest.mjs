@@ -3,7 +3,15 @@ import { latLngToCell, cellToBoundary, cellToLatLng, gridDisk } from 'h3-js';
 import { encampmentSeverity, recencyWeight, compositionRatio, percentileRanks, confidence, residualByBand, DISORDER_WEIGHTS } from '../src/score.mjs';
 import { categoryOf, dedupe, accessFrom, livelinessFrom } from '../src/amenity.mjs';
 
-const RES = 9;
+const RES = 10;
+// A res-10 cell is ~0.015 km2 - far too little ground to carry its own
+// statistics. Rather than coarsening the grid back, read every cell through a
+// window centred on itself. gridDisk(1) spans ~0.105 km2, the same area as one
+// res-9 cell, so the evidence behind each number is as thick as before while
+// the grid no longer lumps both sides of a street into one hexagon. That was
+// the whole problem at 15th Ave E.
+const LOCAL_K = 1;   // ~0.10 km2, "this block"
+const AREA_K = 3;    // ~0.55 km2, "the neighbourhood"
 const WINDOW_DAYS = 365;
 const HALF_LIFE = 90;
 const PAGE = 50000;
@@ -14,6 +22,13 @@ const ENCAMPMENT = {
   select: 'createddate,latitude,longitude,aretherepeoplepresent,aretheretentsstructuresortarps,aretherervscarsmiscvehicles,istheencampmentblockingaccess,istheretrashordebris',
 };
 const DISORDER = { id: '43nw-pkdq', select: 'createddate,latitude,longitude,servicerequesttype' };
+
+// The five type names repeated on every cell dominate the output file, so they
+// travel as codes with the mapping carried once in the metadata.
+const TYPE_CODE = {
+  'Illegal Dumping': 'd', 'Graffiti Report': 'g', 'Abandoned Vehicle': 'v',
+  'Public Place Litter & Recycling': 'l', 'Streetlight Repair': 's',
+};
 
 const BBOX = [47.48, -122.44, 47.75, -122.22];
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
@@ -131,15 +146,20 @@ const rowFor = (h3) => {
 };
 let rows = keys.map(rowFor);
 
-// Smooth with immediate neighbours before ranking: a single H3 res-9 cell is
-// ~0.1 km2, smaller than the area a person reads as "this block feels bad".
 const byKey = new Map(rows.map((r) => [r.h3, r]));
+const windowSum = (h3, k, field) => {
+  let sum = 0;
+  for (const key of gridDisk(h3, k)) { const n = byKey.get(key); if (n) sum += n[field]; }
+  return sum;
+};
+console.log(`  reading ${rows.length} cells through sliding windows...`);
 for (const r of rows) {
-  const ring = gridDisk(r.h3, 1).filter((k) => k !== r.h3);
-  const neighbours = ring.map((k) => byKey.get(k)).filter(Boolean);
-  const avg = (f) => neighbours.length ? neighbours.reduce((s, n) => s + n[f], 0) / ring.length : 0;
-  r.encSmooth = 0.6 * r.encWeighted + 0.4 * avg('encWeighted');
-  r.disSmooth = 0.6 * r.disWeighted + 0.4 * avg('disWeighted');
+  r.encLocal = windowSum(r.h3, LOCAL_K, 'encWeighted');
+  r.disLocal = windowSum(r.h3, LOCAL_K, 'disWeighted');
+  r.encArea = windowSum(r.h3, AREA_K, 'encWeighted');
+  r.disArea = windowSum(r.h3, AREA_K, 'disWeighted');
+  r.encCountLocal = windowSum(r.h3, LOCAL_K, 'encCount');
+  r.disCountLocal = windowSum(r.h3, LOCAL_K, 'disCount');
 }
 
 // The engagement correction. A cell's total report volume proxies how readily
@@ -148,15 +168,18 @@ for (const r of rows) {
 const cityEnc = rows.reduce((s, r) => s + r.encCount, 0);
 const cityAll = rows.reduce((s, r) => s + r.encCount + r.disCount, 0);
 const cityShare = cityEnc / cityAll;
+// Composition and confidence both read the local window, not the bare cell:
+// at this resolution a single hexagon holds a handful of reports, which is not
+// enough to have an opinion about.
 for (const r of rows) {
-  const total = r.encCount + r.disCount;
+  const total = r.encCountLocal + r.disCountLocal;
   r.total = total;
-  r.composition = compositionRatio(r.encCount, total, cityShare);
+  r.composition = compositionRatio(r.encCountLocal, total, cityShare);
   r.confidence = confidence(total);
 }
 
-const intensityPct = percentileRanks(rows.map((r) => r.encSmooth));
-const disorderPct = percentileRanks(rows.map((r) => r.disSmooth));
+const intensityPct = percentileRanks(rows.map((r) => r.encArea));
+const disorderPct = percentileRanks(rows.map((r) => r.disArea));
 const compositionPct = percentileRanks(rows.map((r) => r.composition));
 rows.forEach((r, i) => {
   r.intensityPct = Math.round(intensityPct[i]);
@@ -169,8 +192,7 @@ rows.forEach((r, i) => {
 const round5 = (pair) => [+pair[0].toFixed(5), +pair[1].toFixed(5)];
 
 // Walkable access is measured from each cell's centre out to real venues, not
-// by counting what happens to sit inside the cell: a res-9 hexagon is ~330m
-// across, so a bar one cell over is still a two-minute walk.
+// by counting what happens to sit inside the cell.
 console.log('  scoring walkable amenity access...');
 for (const r of rows) {
   const [lat, lng] = cellToLatLng(r.h3);
@@ -192,20 +214,24 @@ const residual = residualByBand(rows.map((r) => r.amenityPct), rows.map((r) => r
 const calmPct = percentileRanks(residual.map((v) => -v));
 rows.forEach((r, i) => { r.calmPct = Math.round(calmPct[i]); r.residual = Math.round(residual[i]); });
 
-// The same pair again, but unsmoothed. Encampment reports cluster sharply - a
-// greenbelt, one block under an overpass - and neighbour-smoothing spreads that
-// across streets that are genuinely clean. Smoothed reads better at city scale;
-// unsmoothed is the honest answer to "what about this address". 15th Ave E is
-// the case in point: the blocks east of it are near-empty while a cell 400m
-// west carries hundreds of reports.
-const encLocalPct = percentileRanks(rows.map((r) => r.encWeighted));
-const disLocalPct = percentileRanks(rows.map((r) => r.disWeighted));
+// The same pair again, read through the tight window rather than the broad
+// one. Encampment reports cluster sharply - a greenbelt, one block under an
+// overpass - so the wide read answers "how is this neighbourhood" while the
+// tight one answers "how is this block". 15th Ave E is the case in point: the
+// blocks east of it are near-empty while a cell 400m west carries hundreds.
+const encLocalPct = percentileRanks(rows.map((r) => r.encLocal));
+const disLocalPct = percentileRanks(rows.map((r) => r.disLocal));
 const grimeLocalPct = percentileRanks(rows.map((_, i) => encLocalPct[i] + disLocalPct[i]));
 const residualLocal = residualByBand(rows.map((r) => r.amenityPct), grimeLocalPct, 10);
 const calmLocalPct = percentileRanks(residualLocal.map((v) => -v));
 rows.forEach((r, i) => {
   r.grimeLocalPct = Math.round(grimeLocalPct[i]);
   r.calmLocalPct = Math.round(calmLocalPct[i]);
+  // Kept apart as well as combined. Encampment presence and commercial-street
+  // grime are both "what you would see", but they are not the same worry, and
+  // a strip of bars generates graffiti whatever else is true of it.
+  r.encPct = Math.round(encLocalPct[i]);
+  r.disPct = Math.round(disLocalPct[i]);
 });
 
 const features = rows.map((r) => {
@@ -217,15 +243,16 @@ const features = rows.map((r) => {
     properties: {
       h3: r.h3,
       lat: +lat.toFixed(5), lng: +lng.toFixed(5),
-      enc: r.encCount, dis: r.disCount, total: r.total,
+      enc: r.encCountLocal, dis: r.disCountLocal, total: r.total,
       intensity: r.intensityPct, disorder: r.disorderPct, composition: r.compositionPct,
       amenity: r.amenityPct, grime: r.grimePct, calm: r.calmPct, residual: r.residual,
       grimeLocal: r.grimeLocalPct, calmLocal: r.calmLocalPct,
+      encPct: r.encPct, disPct: r.disPct,
       liveliness: +r.liveliness.toFixed(2),
       access: Object.fromEntries(Object.entries(r.access).map(([k, v]) => [k, +v.toFixed(2)])),
       ratio: +r.composition.toFixed(3),
       conf: r.confidence,
-      types: r.types,
+      types: Object.fromEntries(Object.entries(r.types).map(([k, v]) => [TYPE_CODE[k] ?? k, v])),
     },
   };
 });
@@ -239,6 +266,8 @@ const out = {
     encampmentReports: cityEnc, disorderReports: cityAll - cityEnc, cells: rows.length,
     amenities: pois.length,
     sources: { encampment: ENCAMPMENT.id, disorder: DISORDER.id, amenities: 'OpenStreetMap via Overpass' },
+    localKm2: +(0.0150 * (1 + 3 * LOCAL_K * (LOCAL_K + 1))).toFixed(3),
+    typeNames: Object.fromEntries(Object.entries(TYPE_CODE).map(([name, code]) => [code, name])),
   },
   features,
 };

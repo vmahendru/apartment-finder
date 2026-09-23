@@ -146,18 +146,44 @@ scale, because encampment reports cluster sharply - one greenbelt, one block
 under an overpass - and neighbour-smoothing spreads that across streets that
 are genuinely clean.
 
-### Where it is still weak
+### Resolution, and sliding windows
 
-At H3 resolution 9 a cell is ~330m across, which is wider than the pocket that
-makes an address pleasant. The score is neutral (~50) on 15th & Mercer even
-though the block-level evidence is good, because the cell and its neighbours
-straddle both the quiet east side and the transition toward Broadway.
-Resolution 10 (~130m) would resolve it, at roughly 7x the cells.
+Cells are H3 resolution 10, about 130m across. That is far too little ground to
+carry its own statistics, so every cell is read through a **window centred on
+itself**: `gridDisk(1)` spans ~0.105 km², the same area as one resolution-9
+cell. The evidence behind each number is as thick as it was at the coarser
+grid, but the grid no longer lumps both sides of a street into one hexagon.
 
-Weighting is not the cause: scoring grime on encampments alone, on encampments
-plus 311 disorder, or on a 2:1 blend separates the ground-truth anchors almost
-identically (22.3, 22.4 and 23.7 points of separation between the good and
-rough groups).
+That was the whole problem. A transect west to east across 15th Ave E, which a
+330m cell could not have shown (`npm run transect -- 47.62425 -122.31262`):
+
+```
+  -209m   enc  140
+   -74m   enc   12
+  +129m   enc    1
+  +400m   enc  184
+```
+
+Cost: 12,098 cells, a 6.9 MB file that gzips to 1.4 MB, and a city-wide view
+that looks speckled when zoomed all the way out. Worth it for address-level
+work and for the overlay, where you are zoomed in anyway.
+
+### Reading the numbers honestly
+
+Encampment counts are savagely skewed. Across the 12,098 windows the median
+holds **3** reports and a third hold none, while the mean is 42.6 and the top
+percentile carries 626 or more. So a window with a dozen reports sits near the
+65th percentile, not near the floor - "quiet compared with the next street
+over" and "quiet for Seattle" are different claims, and the tool should not be
+read as making the second one.
+
+For that reason `look-up` prints encampments and street grime separately as
+well as combined. They are both things you would see, but they are not the same
+worry, and a strip of bars generates graffiti whatever else is true of it.
+
+Weighting is not what holds a lively commercial block's score down: scoring
+grime on encampments alone, on encampments plus 311 disorder, or on a 3:1 blend
+separates the ground-truth anchors to within a point (12.9, 12.8 and 12.2).
 
 ### The honest limitation
 
