@@ -1,11 +1,11 @@
-const { SEQ, DIV, AMEN, sample, bivariate, BIV, VIEW_META } = globalThis.Sidewalk;
+const { SEQ, DIV, AMEN, sample, bivariate, CORNERS, BIV_GAMMA, BIV_KEY, VIEW_META } = globalThis.Sidewalk;
 
 const COPY = {
   reported: 'Raw report density, the way the city\u2019s own data reads it. A neighbourhood that reports more of everything looks worse here.',
   adjusted: 'Encampment reports as a share of all reports from the same area, so how readily a neighbourhood picks up the phone divides out.',
   gap: 'Where the two readings part company. Rose: worse than the raw count suggests. Teal: the raw count is inflated \u2014 usually a neighbourhood that reports everything, loudly.',
-  walkable: 'Bars, restaurants, coffee and parks within a walk, counted from this point outward rather than by what sits inside the cell.',
-  sweet: 'Lively places report more disorder, partly because more people are there to report it. So this asks a fairer question: among places with a comparable amount going on, which stay calmer? White is both.',
+  walkable: 'Bars, restaurants, coffee and parks within a walk, measured outward from each cell rather than by what happens to sit inside it.',
+  sweet: 'Lively places report more disorder, partly because more people are there to report it. So this asks a fairer question: among places with a comparable amount going on, which stay calmer?',
 };
 
 const EXPR = {
@@ -17,12 +17,19 @@ const EXPR = {
 const VIEWS = Object.fromEntries(Object.entries(VIEW_META)
   .map(([k, v]) => [k, { ...v, expr: EXPR[k], explainer: COPY[k] }]));
 
-const pct = (field) => ['^', ['/', ['get', field], 100], BIV.gamma];
-// Built from the same coefficients the canvas overlay uses, so the two
-// renderers cannot drift apart.
-const bivariateExpr = () => ['rgb', ...[0, 1, 2].map((i) => [
-  'min', 255, ['+', BIV.base[i], ['*', pct('amenity'), BIV.lively[i]], ['*', pct('calm'), BIV.calm[i]]],
-])];
+// Bilinear blend of the same four named corners the canvas overlay uses, so
+// the two renderers cannot drift apart.
+const bivariateExpr = () => {
+  const a = ['^', ['/', ['get', 'amenity'], 100], BIV_GAMMA];
+  const s = ['^', ['/', ['get', 'calm'], 100], BIV_GAMMA];
+  const C = CORNERS.dark;
+  return ['rgb', ...[0, 1, 2].map((i) => ['+',
+    ['*', ['-', 1, a], ['-', 1, s], C.neither[i]],
+    ['*', a, ['-', 1, s], C.lively[i]],
+    ['*', ['-', 1, a], s, C.calm[i]],
+    ['*', a, s, C.both[i]],
+  ])];
+};
 const colourExpr = (v) => (v.bivariate
   ? bivariateExpr()
   : ['interpolate', ['linear'], ['to-number', v.expr ?? 0], ...v.ramp.flat()]);
@@ -215,7 +222,9 @@ function setView(name) {
   $('#explainer').textContent = v.explainer;
 }
 
-// Nine swatches: calm rising up the grid, liveliness rising across it.
+// Nine swatches to show the space is continuous, then the four corners named
+// outright. An axis arrow assumes the reader already knows what the two
+// dimensions are; naming them does not.
 function buildBivKey() {
   const grid = $('#biv-grid');
   if (grid.childElementCount) return;
@@ -226,6 +235,8 @@ function buildBivKey() {
       grid.appendChild(i);
     }
   }
+  $('#biv-legend').innerHTML = BIV_KEY.map(([corner, label]) =>
+    `<div><dt style="background:rgb(${CORNERS.dark[corner].join(',')})"></dt><dd>${label}</dd></div>`).join('');
 }
 
 document.querySelectorAll('input[name=view]').forEach((el) => {

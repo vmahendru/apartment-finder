@@ -35,6 +35,29 @@ So the map carries two readings and their difference:
 Cells with too little evidence are **outlined, never filled**. A street nobody
 reports is unknown, not clean.
 
+### Reading the two-dimensional key
+
+The "Lively & calm" view encodes two things at once, so its key names all four
+corners rather than relying on axis arrows:
+
+| | |
+|---|---|
+| **Emerald** | Lots to walk to, *and* calm for it. What you are looking for. |
+| **Amber** | Lots to walk to, but rough for it. Pike/Pine, Belltown, Ballard Ave. |
+| **Green** | Calm, but little to walk to. Magnolia, Madison Park. |
+| **Bare** | Neither. |
+
+Shades in between are mixtures of the two axes. On the dark map brightness
+carries the meaning, so the corner you want is the brightest thing on screen.
+Over Zillow's pale basemap that inverts: "neither" is white and vanishes, and
+the corner you want is the darkest, most visible mark on the page.
+
+**Why these colours.** Zillow paints its rental markers purple and its brand
+furniture blue, so the palette avoids both hues outright - an overlay must not
+be mistaken for the thing it sits on top of. Reports run red, liveliness amber,
+calm green. Every ramp stays monotonic in lightness so it survives greyscale
+and colour blindness.
+
 ### Does it survive the calibration case?
 
 The spec says Ballard should score worse than Capitol Hill north / Volunteer
@@ -161,6 +184,13 @@ free. Delete that directory to force a refetch.
 
 `extension/` is an unpacked MV3 extension. Load it via `chrome://extensions`
 -> Developer mode -> Load unpacked.
+
+**Highlight good / Highlight trouble** flips which end of a scale gets inked.
+By default the overlay marks the good places rather than the bad ones, which is
+usually what you want when scanning listings; switch it to see where trouble
+concentrates instead. The choice does not appear on the two-dimensional view
+(it already emphasises the good corner) or on Disagreement (which has no good
+end).
 
 It reads Zillow's map rectangle out of **Zillow's own URL** (`searchQueryState`
 -> `mapBounds`) rather than reaching into page internals or parsing listing

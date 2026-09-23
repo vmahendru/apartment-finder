@@ -163,3 +163,10 @@ html, body {
 .access { margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--hair); }
 .access .row dd { font-size: 13.5px; }
 .access .row dd em { font-size: 12px; }
+
+.biv-head { display: flex; align-items: flex-end; gap: 12px; }
+.biv-legend { margin: 14px 0 0; display: grid; gap: 7px; }
+.biv-legend div { display: grid; grid-template-columns: 13px 1fr; gap: 9px; align-items: start; }
+.biv-legend dt { width: 13px; height: 13px; margin: 2px 0 0; border: 1px solid rgba(255,255,255,.14); }
+.biv-legend dd { margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--paper); }
+.biv-legend div:not(:first-child) dd { color: var(--fog); }

@@ -50,4 +50,22 @@
 
 .sidewalk-biv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; width: 60px; }
 .sidewalk-biv i { display: block; aspect-ratio: 1; }
-.sidewalk-ends { flex-direction: column; gap: 1px; align-items: flex-start; }
+
+.sidewalk-emphasis { display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 9px; border: 1px solid #2B3A48; }
+.sidewalk-emphasis button {
+  padding: 5px 2px; background: none; border: 0; border-left: 1px solid #2B3A48;
+  color: #7E8C99; font: inherit; font-size: 12px; cursor: pointer;
+}
+.sidewalk-emphasis button:first-child { border-left: 0; }
+.sidewalk-emphasis button:hover { color: #E6EDF2; }
+.sidewalk-emphasis button[aria-current="true"] { background: #E6EDF2; color: #131D27; font-weight: 700; }
+.sidewalk-emphasis button:focus-visible { outline: 2px solid #FFC46B; outline-offset: -2px; }
+
+.sidewalk-key { margin: 10px 0 0; display: grid; gap: 6px; }
+.sidewalk-key div { display: grid; grid-template-columns: 12px 1fr; gap: 8px; align-items: start; }
+.sidewalk-key dt { width: 12px; height: 12px; margin: 2px 0 0; border: 1px solid rgba(255,255,255,.18); }
+.sidewalk-key dd { margin: 0; font-size: 11.5px; line-height: 1.35; color: #C3CCD5; }
+
+/* display:grid on these beats the UA stylesheet's [hidden] rule, so the
+   bivariate key kept showing on the one-dimensional views. */
+.sidewalk-panel [hidden] { display: none !important; }

@@ -1,5 +1,5 @@
 (function () {
-  const { projector, boundsFromUrl, sample, bivariateInk, VIEW_META } = globalThis.Sidewalk;
+  const { projector, boundsFromUrl, sample, bivariateInk, CORNERS, BIV_KEY, INK, VIEW_META } = globalThis.Sidewalk;
 
   const VIEW_COPY = {
     sweet: 'Lively & calm',
@@ -16,6 +16,7 @@
   let view = 'sweet';
   let visible = true;
   let lastHref = '';
+  let emphasis = 'good';   // which end of the scale gets inked
 
   // Zillow renames its classes constantly, so try the stable-ish hooks first
   // and fall back to "the biggest thing on the page that behaves like a map".
@@ -69,15 +70,26 @@
         ${Object.entries(VIEW_COPY).map(([k, label]) =>
           `<button type="button" data-view="${k}"${k === view ? ' aria-current="true"' : ''}>${label}</button>`).join('')}
       </div>
+      <div class="sidewalk-emphasis">
+        <button type="button" data-emph="good" aria-current="true">Highlight good</button>
+        <button type="button" data-emph="trouble">Highlight trouble</button>
+      </div>
       <div class="sidewalk-ramp"></div>
       <div class="sidewalk-biv" hidden></div>
       <div class="sidewalk-ends"><span></span><span></span></div>
+      <dl class="sidewalk-key" hidden></dl>
       <p class="sidewalk-status"></p>`;
     host.appendChild(panel);
 
     panel.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       view = b.dataset.view;
       panel.querySelectorAll('[data-view]').forEach((o) => o.removeAttribute('aria-current'));
+      b.setAttribute('aria-current', 'true');
+      syncLegend(); draw();
+    }));
+    panel.querySelectorAll('[data-emph]').forEach((b) => b.addEventListener('click', () => {
+      emphasis = b.dataset.emph;
+      panel.querySelectorAll('[data-emph]').forEach((o) => o.removeAttribute('aria-current'));
       b.setAttribute('aria-current', 'true');
       syncLegend(); draw();
     }));
@@ -95,11 +107,21 @@
     const meta = VIEW_META[view];
     const ramp1 = document.querySelector('.sidewalk-ramp');
     const biv = document.querySelector('.sidewalk-biv');
+    const key = document.querySelector('.sidewalk-key');
     const ends = document.querySelectorAll('.sidewalk-ends span');
+    const emph = document.querySelector('.sidewalk-emphasis');
     if (!ramp1) return;
+
+    // The two-dimensional view already puts its emphasis on the good corner,
+    // and the disagreement view has no good end, so the choice only applies
+    // to the plain scales.
+    emph.hidden = !!(meta.bivariate || meta.diverging);
 
     ramp1.hidden = !!meta.bivariate;
     biv.hidden = !meta.bivariate;
+    key.hidden = !meta.bivariate;
+    document.querySelector('.sidewalk-ends').hidden = !!meta.bivariate;
+
     if (meta.bivariate) {
       if (!biv.childElementCount) {
         for (const calm of [100, 50, 0]) {
@@ -109,16 +131,35 @@
             biv.appendChild(i);
           }
         }
+        // Four named corners. An axis arrow assumes the reader already knows
+        // what the two dimensions are; naming them does not.
+        key.innerHTML = BIV_KEY.map(([corner, label]) =>
+          `<div><dt style="background:rgb(${CORNERS.light[corner].join(',')})"></dt><dd>${label}</dd></div>`).join('');
       }
-      ends[0].textContent = 'more to walk to \u2192';
-      ends[1].textContent = '\u2191 calmer for it';
       return;
     }
-    const lo = meta.ramp[0][0], hi = meta.ramp[meta.ramp.length - 1][0];
-    const stops = meta.ramp.map(([p, c]) => `${c} ${(((p - lo) / (hi - lo)) * 100).toFixed(1)}%`);
+
+    const ramp = rampFor(meta);
+    const lo = ramp[0][0], hi = ramp[ramp.length - 1][0];
+    const stops = ramp.map(([p, c]) => `${c} ${(((p - lo) / (hi - lo)) * 100).toFixed(1)}%`);
     ramp1.style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
-    ends[0].textContent = meta.lo;
-    ends[1].textContent = meta.hi;
+    const flipped = isFlipped(meta);
+    ends[0].textContent = flipped ? meta.hi : meta.lo;
+    ends[1].textContent = flipped ? meta.lo : meta.hi;
+  }
+
+  // When the inked end is not the view's own high end, the scale is reversed
+  // and drawn in green: the mark now means "good here", not "trouble here".
+  const isFlipped = (meta) =>
+    !meta.bivariate && !meta.diverging && (emphasis === 'good') !== (meta.goodIsLow === false);
+
+  // Which ink, given the view and which end is being emphasised. Amenity
+  // access keeps its amber when shown the right way up; everything else is
+  // red for trouble, emerald for good.
+  function rampFor(meta) {
+    if (meta.diverging) return INK.div;
+    if (isFlipped(meta)) return meta.goodIsLow === false ? INK.bad : INK.good;
+    return meta.goodIsLow === false ? INK.amen : INK.bad;
   }
 
   const status = (msg) => {
@@ -139,11 +180,15 @@
         alpha: 0.04 + (((lively + calm) / 200) ** 1.6) * 0.44,
       };
     }
-    const value = meta.value(props);
-    const alpha = view === 'gap'
-      ? Math.min(0.5, (Math.abs(value) / 40) * 0.5)
-      : 0.04 + ((Math.max(0, Math.min(100, value)) / 100) ** 1.4) * 0.42;
-    return { fill: sample(meta.ramp, value), alpha };
+    const raw = meta.value(props);
+    if (meta.diverging) {
+      return { fill: sample(meta.ramp, raw), alpha: Math.min(0.5, (Math.abs(raw) / 40) * 0.5) };
+    }
+    const value = isFlipped(meta) ? 100 - raw : raw;
+    return {
+      fill: sample(rampFor(meta), value),
+      alpha: 0.04 + ((Math.max(0, Math.min(100, value)) / 100) ** 1.4) * 0.42,
+    };
   }
 
   function draw() {

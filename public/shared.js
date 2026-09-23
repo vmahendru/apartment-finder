@@ -34,13 +34,15 @@
     return { west: nums[0], east: nums[1], south: nums[2], north: nums[3], zoom: Number(state.mapZoom) || null };
   }
 
-  // Night-lights ramp: cold empty ground warming to sodium where reports pile
-  // up. Monotonic in lightness, so it survives greyscale and colour blindness.
+  // Zillow paints its rental markers purple and its brand furniture blue, so
+  // this palette avoids both hues entirely - an overlay must not be mistaken
+  // for the thing it sits on top of. Reports run red, liveliness amber, calm
+  // green. Every ramp stays monotonic in lightness so it survives greyscale
+  // and colour blindness.
   const SEQ = [
-    [0, '#1E3350'], [25, '#38558A'], [50, '#6A5385'], [75, '#C46B58'], [100, '#FFC46B'],
+    [0, '#1B2430'], [25, '#5E2530'], [50, '#A83A34'], [75, '#E8734A'], [100, '#FFB08A'],
   ];
-  // Diverging, teal/rose rather than red/green.
-  const DIV = [[-40, '#46C4C0'], [0, '#2A3644'], [40, '#E8637F']];
+  const DIV = [[-40, '#46C4C0'], [0, '#2A3644'], [40, '#D94F3D']];
 
   const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 
@@ -60,45 +62,71 @@
     return ramp[ramp.length - 1][1];
   }
 
-  // Amenity access gets its own hue. Reusing the sodium ramp would say "more
+  // Amenity access gets its own hue. Reusing the report ramp would say "more
   // is worse", which is backwards for bars and coffee.
-  const AMEN = [[0, '#1C1A28'], [33, '#5A2A55'], [66, '#A8417A'], [100, '#F58BB8']];
+  const AMEN = [[0, '#20222A'], [33, '#5A4526'], [66, '#A8792F'], [100, '#F5C46B']];
+  // Used when the overlay is asked to pick out the good end rather than the
+  // bad one. Same green as the calm axis of the two-dimensional view.
+  const GOOD = [[0, '#1F2A26'], [33, '#2A5C48'], [66, '#3E9B72'], [100, '#8FE0B8']];
 
   // Two axes mixed the way light mixes: magenta for how much is around, cyan
   // for how calm it is given that. Dark = neither, and the places that are
   // both are the brightest thing on the map.
-  // Balanced so the two single-axis corners land at similar brightness (~140)
-  // and only the both-high corner reaches white. Shared with the map's own
-  // colour expression so the two renderers cannot drift apart.
-  // gamma: both axes are percentile ranks, so they are uniform by construction
-  // and a linear mix leaves most of the city in a washed-out middle. Squaring
-  // pushes the mid-range back down so only genuinely high values light up.
-  const BIV = { base: [22, 30, 48], lively: [210, 75, 140], calm: [34, 140, 150], gamma: 2 };
+  // Four named corners, bilinearly blended, rather than mixing two inks: it
+  // gives direct control over what "both" looks like, which is the only corner
+  // anyone is really hunting for.
+  //
+  // On the dark map brightness carries the meaning - neither is nearly the
+  // background, both is the brightest thing on screen. Over Zillow's pale
+  // basemap that inverts: neither is white and disappears, both is a deep
+  // emerald, the darkest and most visible mark on the page.
+  const CORNERS = {
+    dark:  { neither: [22, 32, 43],    lively: [200, 134, 42], calm: [53, 147, 122],  both: [127, 239, 196] },
+    light: { neither: [255, 255, 255], lively: [232, 163, 61], calm: [127, 198, 164], both: [14, 110, 92] },
+  };
+  // Both axes are percentile ranks, so they are uniform by construction and a
+  // linear blend leaves most of the city in a washed-out middle.
+  const BIV_GAMMA = 2;
 
-  function bivariate(lively, calm) {
-    const a = (Math.max(0, Math.min(100, lively)) / 100) ** BIV.gamma;
-    const s = (Math.max(0, Math.min(100, calm)) / 100) ** BIV.gamma;
-    return BIV.base.map((b, i) => Math.round(Math.min(255, b + a * BIV.lively[i] + s * BIV.calm[i])));
+  function blend(corners, lively, calm) {
+    const a = (Math.max(0, Math.min(100, lively)) / 100) ** BIV_GAMMA;
+    const s = (Math.max(0, Math.min(100, calm)) / 100) ** BIV_GAMMA;
+    return [0, 1, 2].map((i) => Math.round(
+      (1 - a) * (1 - s) * corners.neither[i] + a * (1 - s) * corners.lively[i]
+      + (1 - a) * s * corners.calm[i] + a * s * corners.both[i]
+    ));
   }
 
-  // The dark map mixes light: both axes high goes to white. Over Zillow's pale
-  // basemap that is invisible, so there the same two hues mix as ink on paper
-  // and both-high goes to a deep indigo - the most visible thing on the page.
-  const INK = { lively: [20, 190, 60], calm: [200, 25, 30], gamma: 2 };
+  const bivariate = (lively, calm) => blend(CORNERS.dark, lively, calm);
+  const bivariateInk = (lively, calm) => blend(CORNERS.light, lively, calm);
 
-  function bivariateInk(lively, calm) {
-    const a = (Math.max(0, Math.min(100, lively)) / 100) ** INK.gamma;
-    const s = (Math.max(0, Math.min(100, calm)) / 100) ** INK.gamma;
-    return [0, 1, 2].map((i) => Math.round(Math.max(0, 255 - a * INK.lively[i] - s * INK.calm[i])));
-  }
-
-  const VIEW_META = {
-    reported: { ramp: SEQ, lo: 'Few reports', hi: 'Many', value: (p) => p.intensity },
-    adjusted: { ramp: SEQ, lo: 'Below city mix', hi: 'Above', value: (p) => p.composition },
-    gap: { ramp: DIV, lo: 'Count overstates', hi: 'Count understates', value: (p) => p.composition - p.intensity },
-    walkable: { ramp: AMEN, lo: 'Little in reach', hi: 'Plenty', value: (p) => p.amenity },
-    sweet: { bivariate: true, value: (p) => p.amenity, second: (p) => p.calm },
+  // The map's ramps run dark-to-light for a dark basemap. Over Zillow's pale
+  // one that puts the emphasised end at its palest, so the overlay gets its own
+  // set running white-to-saturated: the more it matters, the darker the mark.
+  const INK = {
+    bad:  [[0, '#FFFFFF'], [50, '#E08A6E'], [100, '#A32E1E']],
+    good: [[0, '#FFFFFF'], [50, '#7FC6A4'], [100, '#0E6E5C']],
+    amen: [[0, '#FFFFFF'], [50, '#E8C07D'], [100, '#B07414']],
+    div:  [[-40, '#2E8C86'], [0, '#F2F2F2'], [40, '#A32E1E']],
   };
 
-  root.Sidewalk = { mercY, projector, boundsFromUrl, SEQ, DIV, AMEN, sample, bivariate, bivariateInk, BIV, INK, VIEW_META };
+  // Plain language beats an axis arrow. These are the four corners named.
+  const BIV_KEY = [
+    ['both', 'Lots to walk to, and calm for it'],
+    ['lively', 'Lots to walk to, but rough for it'],
+    ['calm', 'Calm, but little to walk to'],
+    ['neither', 'Neither'],
+  ];
+
+  // goodIsLow says which end of the scale is the desirable one, so the overlay
+  // can be asked to pick out good places rather than bad ones.
+  const VIEW_META = {
+    sweet: { bivariate: true, value: (p) => p.amenity, second: (p) => p.calm },
+    walkable: { ramp: AMEN, lo: 'Little in reach', hi: 'Plenty', value: (p) => p.amenity, goodIsLow: false },
+    reported: { ramp: SEQ, lo: 'Few reports', hi: 'Many', value: (p) => p.intensity, goodIsLow: true },
+    adjusted: { ramp: SEQ, lo: 'Below city mix', hi: 'Above', value: (p) => p.composition, goodIsLow: true },
+    gap: { ramp: DIV, lo: 'Count overstates', hi: 'Count understates', value: (p) => p.composition - p.intensity, diverging: true },
+  };
+
+  root.Sidewalk = { mercY, projector, boundsFromUrl, SEQ, DIV, AMEN, sample, bivariate, bivariateInk, CORNERS, BIV_GAMMA, BIV_KEY, GOOD, INK, VIEW_META };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
